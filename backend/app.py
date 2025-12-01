@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,31 +8,34 @@ from agno.models.google import Gemini
 from agno.tools.duckduckgo import DuckDuckGoTools
 from agno.exceptions import ModelProviderError
 
-
 # -----------------------------------------------------
-# 🔑 GOOGLE GEMINI API KEY  (YOUR KEY INCLUDED)
+# 🔑 GOOGLE GEMINI API KEY
 # -----------------------------------------------------
 os.environ["GOOGLE_API_KEY"] = "AIzaSyB682-c0i7Pv9sDt0TIHTtqgkKNdc_t25k"
 
-# 🔥 Stable Gemini Model
 GEMINI_MODEL_ID = "gemini-2.0-flash-001"
 
-
 # -----------------------------------------------------
-# 🚀 FASTAPI INITIAL SETUP
+# 🚀 FASTAPI APP
 # -----------------------------------------------------
 app = FastAPI()
 
-# Allow any frontend to connect (React, HTML, Flutter, Android)
+# 👇 IMPORTANT: CORS CONFIG FOR NETLIFY + RENDER
+# If you know your Netlify domain, you can replace "*" with:
+# origins = ["https://your-site-name.netlify.app"]
+origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow ALL origins
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=False,  # must be False when using "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Input Model
+# -----------------------------------------------------
+# 📥 REQUEST MODEL
+# -----------------------------------------------------
 class UserInput(BaseModel):
     name: str
     age: int
@@ -44,9 +47,8 @@ class UserInput(BaseModel):
 
 
 # -----------------------------------------------------
-# 🤖 AGENT DEFINITIONS
+# 🤖 AGENTS
 # -----------------------------------------------------
-
 dietary_planner = Agent(
     model=Gemini(id=GEMINI_MODEL_ID),
     description="Creates personalized dietary plans.",
@@ -58,7 +60,7 @@ dietary_planner = Agent(
         "No medical advice.",
     ],
     tools=[DuckDuckGoTools()],
-    markdown=False
+    markdown=True,  # ✅ let Gemini return Markdown; your frontend uses `marked.parse`
 )
 
 fitness_trainer = Agent(
@@ -71,7 +73,7 @@ fitness_trainer = Agent(
         "No medical advice or risky exercises.",
     ],
     tools=[DuckDuckGoTools()],
-    markdown=False
+    markdown=True,
 )
 
 team_lead = Agent(
@@ -83,88 +85,107 @@ team_lead = Agent(
         "Add rest day recommendations.",
         "End with general safety disclaimer.",
     ],
-    markdown=False
+    markdown=True,
 )
 
 
 # -----------------------------------------------------
-# ⚙️ HELPER FUNCTIONS
+# ⚙️ HELPERS
 # -----------------------------------------------------
-def gen_meal_plan(data: UserInput):
+def gen_meal_plan(data: UserInput) -> str:
     prompt = f"""
     Create a daily meal plan for:
-    Age: {data.age}, Weight: {data.weight}, Height: {data.height},
+    Name: {data.name}
+    Age: {data.age}, Weight: {data.weight} kg, Height: {data.height} cm,
     Activity Level: {data.activity_level}, Dietary Preference: {data.dietary_preference},
     Fitness Goal: {data.fitness_goal}.
-    Include breakfast, lunch, dinner, snacks, hydration tips, and nutrition notes.
+
+    Requirements:
+    - Use clear Markdown.
+    - Include: breakfast, lunch, dinner, and 1–2 snacks.
+    - Add hydration tips.
+    - Brief macro or nutrition notes.
+    - No medical advice or diagnosis.
     """
     try:
         result = dietary_planner.run(prompt)
-        return result.content if hasattr(result, "content") else str(result)
+        return getattr(result, "content", str(result))
     except ModelProviderError as e:
         return f"Meal Plan Error: {e}"
 
 
-def gen_workout_plan(data: UserInput):
+def gen_workout_plan(data: UserInput) -> str:
     prompt = f"""
     Create a workout plan for:
-    Age: {data.age}, Weight: {data.weight}, Height: {data.height},
+    Name: {data.name}
+    Age: {data.age}, Weight: {data.weight} kg, Height: {data.height} cm,
     Activity Level: {data.activity_level}, Fitness Goal: {data.fitness_goal}.
-    Include warm-up, main workout, and cool-down.
-    Keep exercises beginner-friendly and safe.
+
+    Requirements:
+    - Use clear Markdown with headings and bullet points.
+    - Include: warm-up, main workout, and cool-down.
+    - Exercises should be beginner-friendly and can be done at home or with minimal equipment.
+    - Adjust intensity based on activity level.
+    - No risky or advanced movements; no medical advice.
     """
     try:
         result = fitness_trainer.run(prompt)
-        return result.content if hasattr(result, "content") else str(result)
+        return getattr(result, "content", str(result))
     except ModelProviderError as e:
         return f"Workout Plan Error: {e}"
 
 
-def gen_combined_plan(name: str, meal: str, workout: str):
+def gen_combined_plan(name: str, meal: str, workout: str) -> str:
     prompt = f"""
     User: {name}
 
-    Meal Plan:
+    --- MEAL PLAN ---
     {meal}
 
-    Workout Plan:
+    --- WORKOUT PLAN ---
     {workout}
 
-    Combine these into a weekly schedule.
-    Provide daily routine breakdown.
-    Add lifestyle tips, rest day suggestions.
-    Add a friendly disclaimer.
-    """
+    Combine these into a 7-day weekly plan.
 
+    Requirements:
+    - Use Markdown.
+    - Provide a day-wise table or sections (Day 1, Day 2, ...).
+    - For each day, mention:
+      - Key meals and general structure (not full recipes).
+      - Workout focus (e.g., upper body, cardio, rest).
+    - Add 3–5 lifestyle tips at the end.
+    - Finish with a short, friendly disclaimer that this is not medical advice.
+    """
     try:
         result = team_lead.run(prompt)
-        return result.content if hasattr(result, "content") else str(result)
+        return getattr(result, "content", str(result))
     except ModelProviderError as e:
         return f"Combined Plan Error: {e}"
 
 
 # -----------------------------------------------------
-# 📌 API ROUTE — FRONTEND WILL CALL THIS
+# 📌 MAIN API: /generate-plan
 # -----------------------------------------------------
 @app.post("/generate-plan")
 def generate_plan(data: UserInput):
-    # 1) Generate diet + workout
-    meal = gen_meal_plan(data)
-    workout = gen_workout_plan(data)
+    try:
+        meal = gen_meal_plan(data)
+        workout = gen_workout_plan(data)
+        combined = gen_combined_plan(data.name, meal, workout)
 
-    # 2) Generate combined strategy
-    combined = gen_combined_plan(data.name, meal, workout)
-
-    # 3) Return as JSON
-    return {
-        "meal_plan": meal,
-        "workout_plan": workout,
-        "combined_plan": combined
-    }
+        return {
+            "meal_plan": meal,
+            "workout_plan": workout,
+            "combined_plan": combined,
+        }
+    except Exception as e:
+        # You can see this in Render logs
+        print("❌ Error in /generate-plan:", e)
+        raise HTTPException(status_code=500, detail="Internal server error while generating plan")
 
 
 # -----------------------------------------------------
-# 🎉 ROOT ENDPOINT
+# 🏠 HEALTH CHECK
 # -----------------------------------------------------
 @app.get("/")
 def home():
