@@ -4,3 +4,4 @@ agno
 duckduckgo-search
 google-genai
 python-dotenv
+ddgs
