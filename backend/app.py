@@ -13,9 +13,8 @@ from agno.exceptions import ModelProviderError
 # 🔑 API KEYS (Load these securely!)
 # -----------------------------------------------------
 # ⚠️ REPLACE WITH YOUR REAL KEYS
-os.environ["GOOGLE_API_KEY"] = "YOUR_GOOGLE_API_KEY_HERE"
-os.environ["GOOGLE_CSE_ID"] = "YOUR_SEARCH_ENGINE_ID_HERE" # 👈 PASTE ID FROM STEP 1
-
+os.environ["GOOGLE_API_KEY"] = "AIzaSyBokBtx2TwF_tO5TfZu5FLkUnsK9Dw4R0g"
+os.environ["GOOGLE_CSE_ID"] = "55ed71df05dd74927"
 GEMINI_MODEL_ID = "gemini-2.0-flash-001"
 
 app = FastAPI()
