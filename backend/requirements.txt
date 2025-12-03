@@ -5,3 +5,4 @@ duckduckgo-search
 google-genai
 python-dotenv
 ddgs
+GoogleSearchTools
