@@ -11,7 +11,7 @@ from agno.exceptions import ModelProviderError
 # -----------------------------------------------------
 # 🔑 GOOGLE GEMINI API KEY
 # -----------------------------------------------------
-os.environ["GOOGLE_API_KEY"] = "AIzaSyBokBtx2TwF_tO5TfZu5FLkUnsK9Dw4R0g"
+os.environ["GOOGLE_API_KEY"] = "GOOGLE_API_KEY"
 
 GEMINI_MODEL_ID = "gemini-2.0-flash-001"
 
