@@ -1,8 +1,7 @@
 fastapi
-uvicorn[standard]
+uvicorn
 agno
-duckduckgo-search
 google-genai
 python-dotenv
-ddgs
-GoogleSearchTools
+duckduckgo-search
+google-api-python-client
